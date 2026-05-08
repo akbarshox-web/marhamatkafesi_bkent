@@ -26,31 +26,46 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS configuration - allow specific origins for credentials
+// CORS configuration - strictly allow origins from .env
+const allowedOrigins = (process.env.CLIENT_URL || "")
+  .split(',')
+  .map(url => url.trim())
+  .filter(url => url && url.startsWith('http'));
+
+console.log(`[Security] Strictly allowed origins:`, allowedOrigins);
+
+// Middleware to block unauthorized access (including direct browser access)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // Allow OPTIONS requests for CORS preflight
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
+  // Strictly check if the origin is allowed
+  if (origin && allowedOrigins.includes(origin)) {
+    return next();
+  }
+
+  // Block everything else
+  console.warn(`[Security] Blocked unauthorized access from: ${origin || 'Direct Access'}`);
+  res.status(403).json({ 
+    error: "Taqiqlangan. Ushbu API'ga faqat ruxsat berilgan saytlar kirishi mumkin." 
+  });
+});
+
 const corsOptions = {
   origin: function (origin, callback) {
-    console.log(`[CORS] Request Origin: ${origin}`);
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://praktika-reakt.vercel.app',
-      'https://praktika-bkent.vercel.app'
-    ]
-
-    // Allow requests with no origin (like mobile apps, curl, same-origin)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true)
     } else {
-      console.warn(`[CORS] Rejected Origin: ${origin}`);
-      callback(new Error('CORS not allowed'))
+      callback(null, false)
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }
 app.use(cors(corsOptions))
 
